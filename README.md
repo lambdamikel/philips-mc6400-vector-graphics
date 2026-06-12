@@ -97,6 +97,61 @@ There are two fun INS8070 gotchas documented in the code: **`A` is the low byte
 of `EA`** (so `LD A` silently clobbers a 16-bit result), and the double-buffering
 trick above (without it the beam draws L-shaped jogs between points).
 
+## How it was built — the development pipeline
+
+There was no INS8070 assembler or emulator on hand, and no way to *see* the
+oscilloscope output without hardware. So the whole thing was bootstrapped in
+Python and developed in a tight **assemble → simulate → render → inspect** loop —
+every feature was verified as an image on a virtual scope before any hardware
+existed.
+
+```
+   asm/*.asm ──[asm8070.py]──▶ bytes ──[ins8070.py sim]──▶ (X,Y) DAC stream
+       ▲                                                          │
+       │                                                    [render.py]
+       └────────── inspect · diagnose · fix ◀── PNG / GIF ◀───────┘
+
+   bytes ──[make_ram.py]──▶ .RAM ──▶ PicoRAM SD card ──▶ real MC6400 ──▶ scope
+```
+
+**1. Reverse-engineering the machine.** The CPU (INS8070), clock (1 MHz), memory
+map (ROM `0x0000–0x0FFF`, RAM `0x1000–0x13FF`, on-board I/O `0xFD0x`, fast
+internal RAM `0xFFC0–0xFFFF`), and the expansion-bus pinout were pieced together
+from the MC6400 manual, the INS8070 datasheets, and — invaluably — Thorsten
+Brehm's emulator source. The unused `0xE000` block was chosen for the DAC.
+
+**2. A from-scratch toolchain.** Three Python tools, none pre-existing: the
+[assembler](asm/asm8070.py) (exploits the regular opcode structure and encodes
+the INS8070's off-by-one program counter), the [simulator](sim/ins8070.py)
+(cycle-accurate, with a virtual DAC and keypad), and the
+[renderer](sim/render.py) (an analog-beam model → image).
+
+**3. Validation against ground truth.** Trust was earned, not assumed: the
+simulator was validated by **running the real MasterLab monitor ROM**, which
+reproduced the machine's genuine multiplexed 7-segment display scan; the hardware
+`MPY`/`DIV` instructions were unit-tested; and a Python **reference model**
+([`cube_ref.py`](tools/cube_ref.py)) of the exact fixed-point math let the on-CPU
+projection be checked **bit-for-bit** at every step.
+
+**4. Incremental, visual development.** Each capability was built and *seen*
+before the next: a single DAC dot → a line engine → a static baked cube → live
+rotation → perspective → keypad control → torus → sphere → speed optimization.
+Bugs surfaced on screen and were diagnosed in the simulator — a stray-line glitch
+turned out to be a signed-byte overflow in the line engine; a staircase artifact
+revealed that the DAC must be **double-buffered** (which then shaped the
+hardware); and a projection that collapsed to a point was traced, by
+single-stepping the simulator, to the INS8070 quirk that **`A` is the low byte of
+`EA`** (so `LD A` was silently clobbering a 16-bit result).
+
+**5. Hardware co-designed in the loop.** Two hardware decisions came straight out
+of the simulator: the **double-buffered 3-latch DAC** (so X and Y update on the
+same edge), and the **DSO-friendly single-stroke drawing** — verified by
+rendering with blanking disabled, which is exactly how a digital scope behaves.
+
+**6. Onto the real machine.** Finished programs are exported to PicoRAM's `.RAM`
+format and loaded over SD card — the format itself checked by a round-trip back
+through the simulator.
+
 ## Build & run
 
 Everything is plain Python 3 + ImageMagick (for rendering). No Node, no `asl`.
