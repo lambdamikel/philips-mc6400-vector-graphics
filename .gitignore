@@ -1,0 +1,15 @@
+# Reference material — third-party / copyrighted / too large for GitHub
+*.pdf
+/ref/
+
+# Generated / intermediate build artifacts (regenerable)
+/build/
+
+# Python
+__pycache__/
+*.pyc
+
+# Editor / OS / tooling
+.claude/
+.DS_Store
+*.swp
