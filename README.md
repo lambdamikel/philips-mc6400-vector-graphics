@@ -39,6 +39,36 @@ to the DAC.)*
 
 ---
 
+## ⚠️ Status: simulated, not yet tested on real hardware
+
+**This is a simulator-validated design that has not yet run on a physical
+MC6400.** Everything here was developed and verified in a cycle-accurate INS8070
+simulator (itself checked against the real machine's monitor ROM and a bit-exact
+math reference) — but the programs have not been executed on real silicon, and
+**the DAC hardware is a paper design that has not been built or tested.** The
+demo GIFs are simulator renders.
+
+Things that may need tuning (or may not work) when it meets real hardware:
+
+- **PicoRAM timing.** These demos run a tight loop entirely out of the emulated
+  1 KB RAM, so PicoRAM must serve every fetch/access at full INS8070 bus speed,
+  continuously. That is what PicoRAM is designed to do, but this particular
+  all-in-RAM, never-pausing access pattern hasn't been tried — it may expose
+  timing limits.
+- **DAC latch timing.** The design latches the data bus on the write strobe
+  edge; the real INS8070 bus setup/hold timing may require adjusting the decode
+  or adding a latch/delay.
+- **Analog side.** R-2R resistor matching, op-amp choice/levels, and the extra
+  bus loading from the add-on are all untested.
+- **Timing estimates.** The quoted refresh rates come from the emulator's cycle
+  model and may differ on real silicon.
+- **Start-up assumptions.** Stack setup and how the monitor's RUN hands control
+  to the loaded program are assumed to match PicoRAM-loaded execution.
+
+In short: it *should* work, and it's been pushed as far as software can take it —
+but consider it a first-silicon-pending design. Bug reports and fixes from anyone
+who builds it are very welcome.
+
 ## What's in the box
 
 A complete, self-contained project — built from scratch in Python with no
