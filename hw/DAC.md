@@ -5,9 +5,14 @@ MC6400 expansion connector ("BUSBELEGUNG") and drives an oscilloscope in X-Y
 (vector) mode.  The INS8070 writes X then Y as memory-mapped I/O; the beam
 jumps straight to the new point and the scope's analog sweep draws the lines.
 
-This is the companion hardware for `asm/cube.asm` (the rotating cube).  It is
-the first known expansion-port peripheral for the MasterLab, so the address map
-below is *our* choice — nothing on the stock machine uses the `0xE000` block.
+This is the companion hardware for the demos.  It is the first known
+expansion-port peripheral for the MasterLab, so the address map below is *our*
+choice — nothing on the stock machine uses the `0xE000` block.
+
+> **Status:** this is a *paper design* — it has not been built or tested on real
+> hardware yet. It was designed alongside the cycle-accurate simulator, which
+> models the double-buffered behaviour exactly, but expect to tune timing/levels
+> on first build.
 
 ## For a digital scope (e.g. Hantek DSO5072P)
 
@@ -27,19 +32,26 @@ the capture window. Adjust V/div + position to fill the screen. The hardware is
 correct/compatible regardless; how smooth it *looks* depends on the DSO's X-Y
 refresh — an analog CRT scope would look nicer, but is not required.
 
+## Block diagram
+
 ```
-                                   MC6400 expansion bus
-   A15 A14 A13 A12 ... A1 A0   D0..D7   NWDS(write)   +5V  GND
-     |   |   |   |        |  |    |          |          |    |
-     +---+---+---+--[decode]--+   |          |          |    |
-                 |            |   |          |          |    |
-            BLKSEL=A15·A14·A13·!A12          |          |    |
-                 |   (74LS21 + 74LS04)       |          |    |
-                 v                            |          |    |
-            74LS138  (G1=BLKSEL, /G2A=NWDS, A=A0,B=A1,C=GND) |
-              Y0 -> Xhold CLK     (write 0xE000)             |
-              Y1 -> Xout/Yout CLK (write 0xE001 = COMMIT)    |
-              Y2 -> Z  flip-flop  (write 0xE002, optional)   |
+  Bus signals               Address decode  (74LS04 + 74LS21 + 74LS138)
+  -----------               ----------------------------------------------
+  A12 A13 A14 A15  ----->    BLKSEL = A15 & A14 & A13 & !A12
+  A0  A1           ----->    74LS138 select inputs
+  NWDS (write)     ----->    74LS138 enable = BLKSEL & NWDS
+                                |
+                                +--> XCLK    write 0xE000
+                                +--> YCLK    write 0xE001  (commit)
+                                +--> ZCLK    write 0xE002  (optional Z-blank)
+
+  Data path  (X-out and Y-out are BOTH clocked by YCLK, so X and Y update together)
+
+  D0..D7 --+--> [ X-hold 74HC374 ] --Q--> [ X-out 74HC374 ] --Q--> [ R-2R X ] --> op-amp --> CH1 (X)
+           |         clk = XCLK                clk = YCLK
+           |
+           +------------------------------> [ Y-out 74HC374 ] --Q--> [ R-2R Y ] --> op-amp --> CH2 (Y)
+                                                 clk = YCLK
 ```
 
 ## Address map (our decode)
@@ -62,35 +74,30 @@ between every point (X updates before Y).  The X-holding latch + a common
 commit strobe make X and Y update on the same clock edge, giving clean vectors.
 Verified in the simulator (`sim/ins8070.py` models exactly this).
 
-## Schematic (one channel shown; Y identical)
+## The R-2R ladder (one per channel)
+
+Each 74HC374 output bit drives the ladder rail-to-rail (0 V / +5 V). Standard
+8-bit voltage-mode R-2R, with **R = 10 kΩ** and **2R = 20 kΩ**:
 
 ```
- Data bus D0..D7 ─────────────┬───────────────┬─────────────► (to Y-out latch too)
-                              │               │
-                        ┌─────┴─────┐   ┌──────┴──────┐
-   0xE000 strobe ─CLK──►│ 74HC374   │   │  74HC374    │◄─CLK── 0xE001 strobe (commit)
-   (Y0 of '138)         │  X-hold   │   │   X-out     │        (Y1 of '138)
-                        │ Q0..Q7    │   │  Q0..Q7     │
-                        └─────┬─────┘   └──────┬──────┘
-                              │  (Q -> D of    │  Q0..Q7  -> 8-bit R-2R ladder
-                              └───X-out latch) │
-                                               ▼
-            MSB Q7 ─[2R]─┐                  R-2R LADDER (R=10k, 2R=20k)
-            Q6 ─[2R]─[R]─┤   ... ─[R]─┬─[2R]─┐
-            ...          │            │      │
-            Q0 ─[2R]─────┘         node Vout─┴─[2R]─GND
-                                       │
-                                       │   ┌──────────┐
-                                       └──►│+  op-amp │───► SCOPE X input
-                                  (buffer) │-  (MCP6002)│   (0..~5V)
-                                       ┌───┤            │
-                                       └───┘ (unity follower; or scale/offset)
+   Vout (MSB node)
+    |
+    +--[R]--+--[R]--+--[R]--+--[R]--+--[R]--+--[R]--+--[R]--+--[2R]--GND
+    |       |       |       |       |       |       |       |
+   [2R]    [2R]    [2R]    [2R]    [2R]    [2R]    [2R]    [2R]
+    |       |       |       |       |       |       |       |
+    D7      D6      D5      D4      D3      D2      D1      D0
+   (MSB)                                                   (LSB)
+
+   Vout --> op-amp unity-gain buffer (e.g. MCP6002) --> scope X (or Y), ~0..5 V
 ```
 
-The **X-out** latch's `Q` outputs feed the X R-2R ladder; the **Y-out** latch
-(clocked by the same `0xE001` commit strobe, but its `D` inputs come straight
-from the data bus) feeds the Y ladder.  So at the commit write: X-out latches
-the held X value, Y-out latches the current bus value (Y) — both on one edge.
+The **X-out** latch's `Q` outputs feed the X ladder; the **Y-out** latch
+(clocked by the same `0xE001` commit strobe, but with its `D` inputs taken
+straight from the data bus) feeds the Y ladder. So on the commit write, X-out
+latches the held X value and Y-out latches the current bus value (Y) — both on
+one edge. Use **0.1 % resistors (or a matched network)** for a monotonic 8-bit
+ladder.
 
 ## Bill of materials
 
@@ -98,7 +105,7 @@ the held X value, Y-out latches the current bus value (Y) — both on one edge.
 |-----|------|---------|-------|
 | 3 | **74HC374** octal D-latch | X-hold, X-out, Y-out | **HC (CMOS)** — clean 0/5 V outputs for ladder accuracy. Don't use LS here. |
 | 1 | 74LS138 (or 74HC138) | 3→8 line decoder → channel strobes | |
-| 1 | 74LS21 (or 74HC21) | dual 4-input AND | `BLKSEL = A12'·A13·A14·A15` |
+| 1 | 74LS21 (or 74HC21) | dual 4-input AND | `BLKSEL = A15·A14·A13·!A12` |
 | 1 | 74LS04 (or 74HC04) | hex inverter | for `!A12` (and spare) |
 | 1 | MCP6002 (rail-to-rail dual op-amp) | X & Y output buffers | single +5 V; or TL072 with ±supply |
 | 32 | resistors for 2× R-2R | DAC ladders | R=10 kΩ, 2R=20 kΩ. **Use 0.1 % (or a matched network)** for monotonic 8-bit. |
@@ -111,12 +118,12 @@ Powered from the bus **+5 V / GND** (the connector supplies it).
 
 **Discrete (no programmer needed):**
 ```
-!A12  = 74LS04 inverter
+!A12   = 74LS04 inverter
 BLKSEL = 74LS21:  A13 & A14 & A15 & !A12
 74LS138:  G1 = BLKSEL,  /G2A = NWDS,  /G2B = GND,  A = A0, B = A1, C = GND
-          Y0(/) -> 74HC374 X-hold CLK
-          Y1(/) -> 74HC374 X-out CLK and Y-out CLK  (tie together)
-          Y2(/) -> 74HC74 Z clock (D = D0)
+          Y0 -> 74HC374 X-hold CLK
+          Y1 -> 74HC374 X-out CLK  AND  Y-out CLK   (tie together)
+          Y2 -> 74HC74  Z clock (D = D0)
 ```
 A '138 output idles HIGH, pulses LOW during the matching write, and returns
 HIGH (rising edge) when `NWDS` releases — that rising edge clocks the '374s,
@@ -133,22 +140,23 @@ ZCLK = !(BLKSEL & !NWDS &  A1 & !A0); /* 0xE002 */
 
 ## Wiring to the MC6400 "BUSBELEGUNG" connector
 
-Take from the expansion connector (see `pics/mc6400-bus.jpg` in picoram repo):
-`D0–D7`, `A0`, `A1`, `A12`, `A13`, `A14`, `A15`, **`NWDS`** (Write Strobe,
-active-low), `+5V`, `GND`.  (You do *not* need `NRDS`, the other address
+Take from the expansion connector (see `pics/mc6400-bus.jpg` in the picoram
+repo): `D0–D7`, `A0`, `A1`, `A12`, `A13`, `A14`, `A15`, **`NWDS`** (Write
+Strobe, active-low), `+5V`, `GND`.  (You do *not* need `NRDS`, the other address
 lines, `NBREQ`, or `NRST` for this write-only DAC.)
 
 ## Output / scope setup
 
-- Each ladder node → op-amp **unity follower** → scope X (and Y) input, giving
+- Each ladder → op-amp **unity follower** → scope X (and Y) input, giving
   ~0–5 V per axis.  Set the scope to **X-Y mode**, DC-coupled, and use the
   position/gain knobs to centre and size the figure.
 - For a centred ±2.5 V swing, use the op-amp as a difference amp subtracting a
   2.5 V reference instead of a plain follower.
 - **Z/blank (optional):** if the scope has a rear Z (intensity) input, drive it
   from the Z flip-flop (blank = beam off during retrace) for a perfectly clean
-  wireframe.  Without it you'll see faint retrace lines, or you can blank using
-  an INS8070 flag output (`F1/F2/F3`) instead of the `0xE002` latch.
+  wireframe.  Without it you'll see faint retrace lines on a non-blanking scope —
+  but the demos avoid this by drawing in one continuous stroke. You can also
+  blank using an INS8070 flag output (`F1/F2/F3`) instead of the `0xE002` latch.
 
 ## Bring-up / test
 
