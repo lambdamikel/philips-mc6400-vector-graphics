@@ -6,12 +6,26 @@ Philips MC6400 "MasterLab" CPU trainer.**
 
 The MasterLab has a 1 MHz [National INS8070](https://en.wikipedia.org/wiki/National_Semiconductor_SC/MP)
 (SC/MP III) CPU and **1 KB of RAM**. With a small home-made R-2R DAC on its
-expansion bus, it drives a scope in X-Y mode and tumbles shaded-free wireframe
-solids in real time — perspective projection, hardware-multiply rotation, and
-interactive hex-pad control, all in well under a kilobyte of code.
+expansion bus, it drives a scope in X-Y mode and tumbles wireframe solids in
+real time — perspective projection, hardware-multiply rotation, and interactive
+hex-pad control, all in well under a kilobyte of code.
+
+Programs are loaded onto the machine with
+**[PicoRAM Ultimate](https://github.com/lambdamikel/picoram-ultimate)** — a
+Raspberry Pi Pico-based (S)RAM/ROM emulator and SD-card interface for vintage
+single-board computers and CPU trainers, including the MC6400.
 
 As far as I know this is the **first expansion-port peripheral ever built for the
 MasterLab**.
+
+> **How this was made.** Every line of code, all of the tooling (the INS8070
+> assembler, cycle-accurate simulator, and oscilloscope renderer), all of the
+> assembly programs, and the R-2R DAC hardware design in this repository were
+> written by **Claude Code (Claude Opus 4.8)**, working under my direction. I
+> (Michael Wessel) supplied the hardware, the MC6400 manual and INS8070
+> references, the goals and design choices, and the testing and feedback at each
+> step — Claude did the implementation, from the assembler all the way to the
+> rotating sphere.
 
 <p align="center">
   <img src="media/cube.gif" width="30%" alt="rotating cube"/>
