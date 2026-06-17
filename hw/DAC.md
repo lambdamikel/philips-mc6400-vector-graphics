@@ -211,12 +211,43 @@ YCLK  = !(BLOCK & !A1 &  A0 & !NWDS) ; /* 0xE001  -> X-out + Y-out   */
 ZCLK  = !(BLOCK &  A1 & !A0 & !NWDS) ; /* 0xE002  -> optional Z-blank*/
 ```
 
-## Wiring to the MC6400 "BUSBELEGUNG" connector
+## The expansion connector (BUSBELEGUNG)
 
-Take from the expansion connector (see `pics/mc6400-bus.jpg` in the picoram
-repo): `D0–D7`, `A0`, `A1`, `A12`, `A13`, `A14`, `A15`, **`NWDS`** (Write
-Strobe, active-low), `+5V`, `GND`.  (You do *not* need `NRDS`, the other address
-lines, `NBREQ`, or `NRST` for this write-only DAC.)
+The full bus pinout, transcribed from the MC6400 manual. Two single-row strips,
+standard 2.54 mm (0.1″) pitch (the board side is female sockets). **✔** marks the
+signals this DAC taps.
+
+![MC6400 expansion bus pinout (BUSBELEGUNG)](mc6400-bus.jpg)
+
+**Upper strip** (top → bottom):
+
+| Signal | Meaning | DAC |
+|--------|---------|:---:|
+| A12, XA12, XA9, A9, YA9 | address-config shorting jumpers (*Kurzschlußbrücken*; factory "Standardbelegung" — leave as-is) | |
+| NRST | Master Reset (active low) | |
+| D0 … D7 | data bus | **✔** |
+| +5V | supply (*Versorgungsspannung*) | ✔* |
+| NBREQ | bus request (active low) | |
+
+**Lower strip** (top → bottom):
+
+| Signal | Meaning | DAC |
+|--------|---------|:---:|
+| NRDS | read strobe (active low) | |
+| GND | ground (*Masse*) | **✔** |
+| NWDS | **write strobe** (active low) | **✔** |
+| A15 … A5 | address bus | ✔ (A15–A12) |
+| GND | ground (*Masse*) | |
+| A4 … A0 | address bus | ✔ (A1, A0) |
+
+So the DAC needs **17 signals**: `D0–D7`, `A0`, `A1`, `A12`, `A13`, `A14`, `A15`,
+`NWDS`, `+5V`*, `GND`. You do *not* need `NRDS`, `NBREQ`, `NRST`, the config
+jumpers, or `A2–A11`.
+&nbsp;&nbsp;*`*` `+5V` only if powering the DAC from the bus — otherwise use an
+external 5 V and just the bus `GND` (see **Powering the board**).*
+
+Image: from the MC6400 manual, via the
+[picoram-ultimate](https://github.com/lambdamikel/picoram-ultimate) repo.
 
 ## Output / scope setup
 
