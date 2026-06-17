@@ -53,6 +53,7 @@ Y2V     EQU   0xFFE6          ; rotated y (=y2), 2 bytes
 ZC      EQU   0xFFE8          ; z2 + FDEPTH, 2 bytes
 DNUM    EQU   0xFFEA          ; SDIV scratch, 2 bytes
 DSIGN   EQU   0xFFEC
+SPIN    EQU   0xFFED          ; heartbeat segment pattern
 STACK   EQU   0x13FF
 
 ; ============================================================
@@ -61,6 +62,8 @@ START:  LD    SP,=STACK
         ST    A,AX
         LD    A,=AY0
         ST    A,AY
+        LD    A,=0x01
+        ST    A,SPIN
 FRAME:  JSR   PROJECT
         LD    A,=12
         ST    A,ECNT
@@ -88,7 +91,20 @@ EDGELP: LD    A,@1(P3)
         LD    A,AY
         ADD   A,=DAY
         ST    A,AY
+        JSR   HEARTB
         BRA   FRAME
+
+; HEARTB: "alive" indicator on display digit 0 (rotates one segment per frame)
+HEARTB: LD    P2,=0xFD00
+        LD    A,=0x01
+        ST    A,0(P2)
+        LD    A,SPIN
+        SL    A
+        BNZ   HBOK
+        LD    A,=0x01
+HBOK:   ST    A,SPIN
+        ST    A,16(P2)
+        RET
 
 ; ============================================================
 PROJECT: LD   A,AY

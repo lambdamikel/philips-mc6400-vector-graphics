@@ -39,6 +39,7 @@ LASTKEY EQU   0xFFD9
 KROW    EQU   0xFFDA
 KMASK   EQU   0xFFDB
 KVAL    EQU   0xFFDC
+SPIN    EQU   0xFFDD          ; heartbeat segment pattern
 STACK   EQU   0x13FF
 
 START:  LD    SP,=STACK
@@ -52,6 +53,8 @@ START:  LD    SP,=STACK
         ST    A,DAYV
         LD    A,=0xFF
         ST    A,LASTKEY
+        LD    A,=0x01
+        ST    A,SPIN
 FRAME:  JSR   PROJECT
         LD    P3,=ROUTE
         LD    A,=NROUTE
@@ -74,7 +77,20 @@ DRLOOP: LD    A,@1(P3)
         LD    A,AY
         ADD   A,DAYV
         ST    A,AY
+        JSR   HEARTB
         BRA   FRAME
+
+; HEARTB: "alive" indicator on display digit 0 (rotates one segment per frame)
+HEARTB: LD    P2,=0xFD00
+        LD    A,=0x01
+        ST    A,0(P2)
+        LD    A,SPIN
+        SL    A
+        BNZ   HBOK
+        LD    A,=0x01
+HBOK:   ST    A,SPIN
+        ST    A,16(P2)
+        RET
 
 HANDLEKEY: JSR SCANKEY
         ST    A,KEY

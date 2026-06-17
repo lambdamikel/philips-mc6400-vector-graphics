@@ -160,6 +160,10 @@ lines, `NBREQ`, or `NRST` for this write-only DAC.)
 
 ## Bring-up / test
 
+**0. Before building anything**, load a `.RAM` over PicoRAM and run it: every demo
+spins one segment of the built-in display (digit 0) once per frame, so you can
+confirm the program is alive on the real machine before soldering the DAC.
+
 1. With no program running, manually (or with a tiny test program) write a few
    values to `0xE000`/`0xE001` and check the two ladder/op-amp outputs with a
    meter: `0x00`→~0 V, `0x80`→~2.5 V, `0xFF`→~5 V, monotonic across codes.

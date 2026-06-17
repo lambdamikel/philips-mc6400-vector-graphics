@@ -49,6 +49,7 @@ VX      EQU   0xFFE0
 VY      EQU   0xFFE1
 VZ      EQU   0xFFE2
 VCNT    EQU   0xFFE3
+SPIN    EQU   0xFFE4          ; heartbeat segment pattern
 STACK   EQU   0x13FF
 
 ; ============================================================
@@ -57,6 +58,8 @@ START:  LD    SP,=STACK
         ST    A,AX
         LD    A,=AY0
         ST    A,AY
+        LD    A,=0x01
+        ST    A,SPIN
 
 FRAME:  JSR   PROJECT         ; fill PCOORD[] for current angles
 ; ---- draw 12 edges ----
@@ -87,7 +90,21 @@ EDGELP: LD    A,@1(P3)
         LD    A,AY
         ADD   A,=DAY
         ST    A,AY
+        JSR   HEARTB
         BRA   FRAME
+
+; HEARTB: "alive" indicator on built-in display digit 0 — one segment that
+; advances once per frame (verify the program runs without any DAC hardware).
+HEARTB: LD    P2,=0xFD00
+        LD    A,=0x01
+        ST    A,0(P2)          ; select digit 0
+        LD    A,SPIN
+        SL    A                ; advance the lit segment
+        BNZ   HBOK
+        LD    A,=0x01          ; wrapped past bit 7 -> restart
+HBOK:   ST    A,SPIN
+        ST    A,16(P2)         ; segment pattern -> 0xFD10
+        RET
 
 ; ============================================================
 ; PROJECT: compute PCOORD[0..7] = projected (sx,sy) for all vertices

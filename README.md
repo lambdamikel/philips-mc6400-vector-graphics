@@ -69,6 +69,14 @@ In short: it *should* work, and it's been pushed as far as software can take it 
 but consider it a first-silicon-pending design. Bug reports and fixes from anyone
 who builds it are very welcome.
 
+**Heartbeat — verify it runs before you build anything.** Every program also
+drives the MasterLab's built-in 7-segment display with a single segment that
+rotates one step per frame. So you can load a `.RAM` over PicoRAM and confirm the
+program is alive — and roughly how fast it's running — from the on-board display
+alone, **before building any of the DAC hardware**. Spinning = running; frozen =
+crashed/hung. (It uses display digit 0, I/O at `0xFD0x`/`0xFD1x`; it does not
+touch the DAC.)
+
 ## What's in the box
 
 A complete, self-contained project — built from scratch in Python with no
