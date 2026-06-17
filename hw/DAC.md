@@ -99,6 +99,40 @@ latches the held X value and Y-out latches the current bus value (Y) — both on
 one edge. Use **0.1 % resistors (or a matched network)** for a monotonic 8-bit
 ladder.
 
+## Op-amp buffer (MCP6002)
+
+Each ladder node is high-impedance (and code-dependent), so it can't drive the
+scope directly — buffer each channel with one half of the **MCP6002** as a
+**unity-gain follower**. Rail-to-rail is essential here: on the single +5 V
+supply the signal swings right up to both rails, and the MCP6002's inputs *and*
+outputs both reach rail-to-rail (a plain single-supply op-amp would clip `0x00`
+and `0xFF`).
+
+```
+          +--\/--+
+   OUTA  1|      |8  VDD  (+5 V)
+   INA-  2|      |7  OUTB
+   INA+  3|      |6  INB-
+   VSS   4|      |5  INB+
+  (GND)   +------+
+```
+
+Per channel it's three connections — `IN+` from the ladder, `OUT` to the scope,
+and `OUT` jumpered back to `IN-` (that feedback wire is what makes it unity gain):
+
+| Channel | non-inv input ← ladder | output → scope | tie OUT back to |
+|---------|------------------------|----------------|-----------------|
+| **X** (op-amp A) | pin 3 (INA+) | pin 1 (OUTA) → CH1 | pin 2 (INA−) |
+| **Y** (op-amp B) | pin 5 (INB+) | pin 7 (OUTB) → CH2 | pin 6 (INB−) |
+
+Power: **pin 8 → +5 V**, **pin 4 → GND**, with a 0.1 µF cap across them close to
+the chip.
+
+Speed: the MCP6002 (~1 MHz, ~0.6 V/µs) slews a full-scale 0→5 V jump in ~8 µs —
+well within the tens of µs the DAC dwells on each point, so it settles fine. For
+razor-sharp corners you could drop in a faster rail-to-rail dual (e.g. MCP6022,
+~10 MHz, identical pinout).
+
 ## Bill of materials
 
 | Qty | Part | Purpose | Notes |
