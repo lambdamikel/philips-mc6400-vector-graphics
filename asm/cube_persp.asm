@@ -54,6 +54,7 @@ ZC      EQU   0xFFE8          ; z2 + FDEPTH, 2 bytes
 DNUM    EQU   0xFFEA          ; SDIV scratch, 2 bytes
 DSIGN   EQU   0xFFEC
 SPIN    EQU   0xFFED          ; heartbeat segment pattern
+HBDIV   EQU   0xFFEE          ; heartbeat frame divider (low duty)
 STACK   EQU   0x13FF
 
 ; ============================================================
@@ -94,15 +95,22 @@ EDGELP: LD    A,@1(P3)
         JSR   HEARTB
         BRA   FRAME
 
-; HEARTB: "alive" indicator on display digit 0 (rotates one segment per frame)
+; HEARTB: low-duty "alive" indicator on display digit 0 — rotating segment lit
+; only 1 frame in 4 (blanked otherwise) to keep LED duty low for long runs.
 HEARTB: LD    P2,=0xFD00
         LD    A,=0x01
         ST    A,0(P2)
+        ILD   A,HBDIV
+        AND   A,=0x03
+        BNZ   HBOFF
         LD    A,SPIN
         SL    A
-        BNZ   HBOK
+        BNZ   HBSET
         LD    A,=0x01
-HBOK:   ST    A,SPIN
+HBSET:  ST    A,SPIN
+        ST    A,16(P2)
+        RET
+HBOFF:  LD    A,=0
         ST    A,16(P2)
         RET
 

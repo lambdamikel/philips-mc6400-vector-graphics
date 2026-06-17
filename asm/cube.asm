@@ -50,6 +50,7 @@ VY      EQU   0xFFE1
 VZ      EQU   0xFFE2
 VCNT    EQU   0xFFE3
 SPIN    EQU   0xFFE4          ; heartbeat segment pattern
+HBDIV   EQU   0xFFE5          ; heartbeat frame divider (low duty)
 STACK   EQU   0x13FF
 
 ; ============================================================
@@ -93,17 +94,23 @@ EDGELP: LD    A,@1(P3)
         JSR   HEARTB
         BRA   FRAME
 
-; HEARTB: "alive" indicator on built-in display digit 0 — one segment that
-; advances once per frame (verify the program runs without any DAC hardware).
+; HEARTB: low-duty "alive" indicator on display digit 0 — a rotating segment,
+; lit only 1 frame in 4 (blanked otherwise) to keep LED duty low for long runs.
 HEARTB: LD    P2,=0xFD00
         LD    A,=0x01
         ST    A,0(P2)          ; select digit 0
-        LD    A,SPIN
-        SL    A                ; advance the lit segment
-        BNZ   HBOK
-        LD    A,=0x01          ; wrapped past bit 7 -> restart
-HBOK:   ST    A,SPIN
+        ILD   A,HBDIV          ; frame divider
+        AND   A,=0x03
+        BNZ   HBOFF            ; 3 of 4 frames: blank
+        LD    A,SPIN           ; on-frame: advance + show the rotating segment
+        SL    A
+        BNZ   HBSET
+        LD    A,=0x01
+HBSET:  ST    A,SPIN
         ST    A,16(P2)         ; segment pattern -> 0xFD10
+        RET
+HBOFF:  LD    A,=0
+        ST    A,16(P2)         ; blank segments (low duty)
         RET
 
 ; ============================================================
