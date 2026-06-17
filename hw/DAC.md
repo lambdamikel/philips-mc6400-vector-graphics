@@ -135,18 +135,26 @@ razor-sharp corners you could drop in a faster rail-to-rail dual (e.g. MCP6022,
 
 ## Bill of materials
 
+**Common to both decoder options:**
+
 | Qty | Part | Purpose | Notes |
 |-----|------|---------|-------|
-| 3 | **74HC374** octal D-latch | X-hold, X-out, Y-out | **HC (CMOS)** — clean 0/5 V outputs for ladder accuracy. Don't use LS here. |
-| 1 | 74LS138 (or 74HC138) | 3→8 line decoder → channel strobes | |
-| 1 | 74LS21 (or 74HC21) | dual 4-input AND | `BLKSEL = A15·A14·A13·!A12` |
-| 1 | 74LS04 (or 74HC04) | hex inverter | for `!A12` (and spare) |
+| 3 | **74HC374** octal D-latch | X-hold, X-out, Y-out | **HC (CMOS)** — clean 0/5 V outputs for ladder accuracy. Not LS here. |
 | 1 | MCP6002 (rail-to-rail dual op-amp) | X & Y output buffers | single +5 V; or TL072 with ±supply |
-| 32 | resistors for 2× R-2R | DAC ladders | R=10 kΩ, 2R=20 kΩ. **Use 0.1 % (or a matched network)** for monotonic 8-bit. |
+| 32 | resistors **or** 2× 8-bit R-2R network | the two DAC ladders | R=10 kΩ, 2R=20 kΩ. A pre-made R-2R SIP network (e.g. Bourns 4116R-R2R) per channel matches far better and saves wiring. |
 | 1 | 74HC74 (optional) | Z/blank flip-flop | only if your scope has a Z (intensity) input |
-| — | 0.1 µF decoupling caps (1 per IC), header/ribbon to bus | | |
+| — | 0.1 µF decoupling (1 per IC), DIP sockets, ribbon/header to bus | | |
 
-Powered from the bus **+5 V / GND** (the connector supplies it).
+**Decoder — pick one:**
+
+| Option | Parts | Notes |
+|--------|-------|-------|
+| **A. Single GAL** (simpler) | 1× GAL16V8 / GAL18V10 / GAL22V10 (or ATF equivalent) | One chip does the whole address decode **and** all latch clocks. Program it with [`dac_decode.pld`](dac_decode.pld). **No inverter / AND / '138 needed.** |
+| **B. Discrete 74-series** | 1× 74LS138 + 1× 74LS21 (dual 4-input AND) + 1× 74LS04 (hex inverter) | No programmer needed, but three logic chips instead of one. |
+
+Powered from the bus **+5 V / GND** (the connector supplies it). Total IC count:
+**5 with the GAL** (3× '374 + GAL + MCP6002) vs **7 discrete** — plus the optional
+'74 if you wire up Z-blank.
 
 ## Decode logic — discrete vs GAL
 
