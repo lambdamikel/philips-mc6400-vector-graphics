@@ -129,13 +129,16 @@ A '138 output idles HIGH, pulses LOW during the matching write, and returns
 HIGH (rising edge) when `NWDS` releases — that rising edge clocks the '374s,
 latching data that is stable through the write.
 
-**GAL/ATF16V8 (one chip, if you have a programmer)** — WinCUPL:
+**GAL (one chip, if you have a programmer).** A complete, ready-to-compile
+WinCUPL source is in **[`dac_decode.pld`](dac_decode.pld)** — it targets a
+GAL16V8 (universal, known pinout) and produces `XCLK` (0xE000), `YCLK` (0xE001
+commit) and an optional `ZCLK` (0xE002). To use a GAL18V10 or 22V10 instead,
+keep the equations and just change the device + pin numbers. The core logic:
 ```
-FIELD addr = [A15..A12];
-BLKSEL = (addr:E000);                 /* A15·A14·A13·!A12 */
-XCLK = !(BLKSEL & !NWDS & !A1 & !A0); /* active-low strobe, 0xE000 */
-YCLK = !(BLKSEL & !NWDS & !A1 &  A0); /* commit, 0xE001 */
-ZCLK = !(BLKSEL & !NWDS &  A1 & !A0); /* 0xE002 */
+BLOCK = A15 & A14 & A13 & !A12 ;       /* 0xE000-0xEFFF block        */
+XCLK  = !(BLOCK & !A1 & !A0 & !NWDS) ; /* 0xE000  -> X-hold          */
+YCLK  = !(BLOCK & !A1 &  A0 & !NWDS) ; /* 0xE001  -> X-out + Y-out   */
+ZCLK  = !(BLOCK &  A1 & !A0 & !NWDS) ; /* 0xE002  -> optional Z-blank*/
 ```
 
 ## Wiring to the MC6400 "BUSBELEGUNG" connector

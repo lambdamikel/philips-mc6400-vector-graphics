@@ -1,0 +1,72 @@
+Name     DAC_DECODE ;
+PartNo   MC6400DAC ;
+Date     2026-06-16 ;
+Revision 01 ;
+Designer Claude Opus 4.8, directed by Michael Wessel ;
+Company  philips-mc6400-vector-graphics ;
+Assembly None ;
+Location None ;
+Device   g16v8 ;
+
+/* =====================================================================
+ *  MC6400 expansion-bus address decoder + DAC latch-clock generator.
+ *
+ *  Decodes CPU writes to the 0xE000 block and produces the clock pulses
+ *  for the three 74HC374 latches of the double-buffered X-Y DAC:
+ *
+ *     write 0xE000  -> XCLK  -> X-hold latch          (stage X)
+ *     write 0xE001  -> YCLK  -> X-out AND Y-out latch (commit X+Y together)
+ *     write 0xE002  -> ZCLK  -> optional Z-blank flip-flop (analog scopes)
+ *
+ *  Pure combinatorial.  A '374 latches its D inputs on the RISING edge of
+ *  its clock; each clock here idles HIGH, drops LOW during the matching
+ *  write (NWDS low), and rises again when NWDS releases at the end of the
+ *  write -- and the data bus is stable by then.
+ *
+ *  Device is g16v8 here because its pinout is universal and known-good.
+ *  To target your GAL18V10 (or a 22V10): keep the equations exactly, set
+ *  the Device line, and renumber the PIN statements per that part's
+ *  datasheet.  The logic is identical.
+ * ===================================================================== */
+
+/* ---- Inputs from the expansion bus (GAL16V8 input pins 2..9) -------- */
+PIN 2  = A0 ;
+PIN 3  = A1 ;
+PIN 4  = A12 ;
+PIN 5  = A13 ;
+PIN 6  = A14 ;
+PIN 7  = A15 ;
+PIN 8  = NWDS ;        /* write strobe: LOW during a write cycle         */
+
+/* ---- Outputs to the 74HC374 clock pins (GAL16V8 I/O pins 12..19) ---- */
+PIN 19 = XCLK ;        /* -> X-hold (#1) CLK                             */
+PIN 18 = YCLK ;        /* -> X-out (#2) CLK and Y-out (#3) CLK (tied)    */
+PIN 17 = ZCLK ;        /* -> optional Z-blank flip-flop CLK (else leave NC) */
+
+/* ---- Address decode (only A15..A12 + A1,A0 are used) --------------- *
+ * BLOCK selects the whole 0xE000-0xEFFF region (nothing else lives
+ * there, so A2..A11 are don't-cares -- harmless aliasing).             */
+BLOCK = A15 & A14 & A13 & !A12 ;
+
+SEL0  = BLOCK & !A1 & !A0 ;     /* 0xE000  (X)              */
+SEL1  = BLOCK & !A1 &  A0 ;     /* 0xE001  (commit X + Y)   */
+SEL2  = BLOCK &  A1 & !A0 ;     /* 0xE002  (Z-blank)        */
+/* 0xE003 (A1 & A0) matches none -> the frame-marker write is a no-op.  */
+
+/* ---- Latch clocks: low during the matching write, rising edge at the
+ *      end of it (NWDS releasing) captures the stable data.            */
+XCLK = !(SEL0 & !NWDS) ;
+YCLK = !(SEL1 & !NWDS) ;
+ZCLK = !(SEL2 & !NWDS) ;
+
+/* =====================================================================
+ *  Pinout cheat-sheet
+ *  ------------------
+ *  GAL16V8 (20-pin DIP):  pin 10 = GND, pin 20 = VCC.
+ *  Tie all three 74HC374 /OE (pin 1) LOW.  0.1uF per IC.
+ *
+ *  If you retarget to a 24-pin GAL22V10, a convenient mapping is:
+ *     A0=1 A1=2 A12=3 A13=4 A14=5 A15=6 NWDS=7
+ *     XCLK=23 YCLK=22 ZCLK=21    (GND=12, VCC=24)
+ *  ...with the same equations above.
+ * ===================================================================== */
