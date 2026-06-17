@@ -152,9 +152,37 @@ razor-sharp corners you could drop in a faster rail-to-rail dual (e.g. MCP6022,
 | **A. Single GAL** (simpler) | 1× GAL16V8 / GAL18V10 / GAL22V10 (or ATF equivalent) | One chip does the whole address decode **and** all latch clocks. Program it with [`dac_decode.pld`](dac_decode.pld). **No inverter / AND / '138 needed.** |
 | **B. Discrete 74-series** | 1× 74LS138 + 1× 74LS21 (dual 4-input AND) + 1× 74LS04 (hex inverter) | No programmer needed, but three logic chips instead of one. |
 
-Powered from the bus **+5 V / GND** (the connector supplies it). Total IC count:
-**5 with the GAL** (3× '374 + GAL + MCP6002) vs **7 discrete** — plus the optional
-'74 if you wire up Z-blank.
+Total IC count: **5 with the GAL** (3× '374 + GAL + MCP6002) vs **7 discrete** —
+plus the optional '74 if you wire up Z-blank. For the supply, see **Powering the
+board** below.
+
+## Powering the board
+
+On a real unit the MasterLab's supply is **9 V DC @ 350 mA** (check the brick's
+polarity symbol before replacing it), feeding an on-board **7805** that makes the
+5 V logic rail — and the expansion-bus **+5 V is that same regulated rail** (a
+continuity check, power off, from the bus +5 V pin to the CPU's Vcc pin — or to
+the 7805's output pin — confirms it). That 7805 runs hot once PicoRAM and this
+DAC share the rail (it burns the 9→5 V drop across the total current), and 350 mA
+gets marginal. Three ways to power the DAC:
+
+- **A — from the bus +5 V** (simplest wiring). Fine for a **CMOS-GAL** build
+  (~20 mA total). Avoid it with a bipolar GAL (~100 mA) on an already-warm 7805.
+- **B — separate regulated +5 V for the DAC** (recommended if the 7805 is hot).
+  Feed the DAC's Vcc externally; **drop the bus +5 V wire but keep the bus GND
+  wire** — that is the required common ground (the DAC reads the MasterLab's
+  logic levels, so the grounds *must* be tied). Use ~5 V to match the MasterLab
+  rail (not 3.3 V). **Sequencing:** the DAC's 5 V must be present whenever the
+  MasterLab drives the bus into it, or the HC input clamp diodes conduct
+  (bus → unpowered Vcc) — use the same power switch, or bring the DAC up first.
+- **C — one modern 5 V / ≥2 A supply for everything** (cleanest overall). Inject
+  regulated 5 V into the MasterLab's "+5 V / 0 V" rail, retiring the 7805, the
+  9 V brick, *and* any mains step-up. Disconnect the 9 V input and lift the 7805
+  output (or add a series Schottky) so it isn't back-driven.
+
+The GAL dominates the DAC's current draw: a bipolar GAL16V8/22V10 is ~90–130 mA,
+a CMOS ATF16V8/22V10 only ~20 mA — pick CMOS if you'd rather keep the DAC on the
+bus rail.
 
 ## Decode logic — discrete vs GAL
 
