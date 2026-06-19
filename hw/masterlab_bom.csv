@@ -1,0 +1,14 @@
+Refs,Qty,Value,Part,Notes
+"R1,R2,R3,R4,R5,R6,R7,R8,R9,R10,R11,R12,R13,R14,R15,R16,R17,R25",18,20k,Resistor,"R-2R ""2R"": 16 bit rungs (R1-R16) + 2 terminations (R17=Y, R25=X). 0.1% or matched."
+"R18,R19,R20,R21,R22,R23,R24,R26,R27,R28,R29,R30,R31,R32",14,10k,Resistor,"R-2R ""R"": series links (R18-R24=Y, R26-R32=X). 0.1% or matched; keep 2R=2x R."
+"C1,C2,C3,C4,C5,C6",6,100nF,Ceramic capacitor,Decoupling - one per IC
+"U1,U2,U3",3,74HC374,Octal D latch (3-state),X-hold / X-out / Y-out. HC (CMOS) - not LS.
+U4,1,MCP6002,Dual rail-to-rail op-amp,"X & Y unity-gain buffers. NOT MCP602 (rail-to-rail INPUT needed); same DIP-8 pinout."
+U5,1,74HC74,Dual D flip-flop,"Z-blank latch. OPTIONAL - only for an analog scope with a Z input. Tie unused pins 11 & 12 to GND."
+U6,1,GAL16V8,Programmable logic,"Address decoder + latch clocks. Program with dac_decode.pld. ATF16V8 ok (lower power)."
+J1,1,Conn_01x20,Pin header 2.54mm,To MasterLab LOWER bus strip
+J2,1,Conn_01x11,Pin header 2.54mm,To MasterLab UPPER bus strip (D0-D7, +5V...)
+J3,1,Conn_01x02,Pin header,Scope output: pin1=X, pin2=Y
+J4,1,Barrel_Jack,DC barrel jack,POWER INPUT - 5 V ONLY (center +). Never 9 V.
+J5,1,Conn_01x02,Pin header,Z-blank output: pin1=Q, pin2=/Q (optional)
+J6,1,Conn_01x01,Pin header,GND reference / scope ground

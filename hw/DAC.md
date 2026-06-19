@@ -156,6 +156,31 @@ Total IC count: **5 with the GAL** (3× '374 + GAL + MCP6002) vs **7 discrete** 
 plus the optional '74 if you wire up Z-blank. For the supply, see **Powering the
 board** below.
 
+### Reference board (KiCad) — per-refdes BOM
+
+A reference 2-layer KiCad board (GAL-decoder variant) has been laid out and
+netlist-checked. Machine-readable: [`masterlab_bom.csv`](masterlab_bom.csv).
+
+| Refs | Qty | Value / Part | Notes |
+|------|-----|--------------|-------|
+| R1–R16, R17, R25 | 18 | **20 kΩ** (2R) | R-2R bit rungs + the two terminations |
+| R18–R24, R26–R32 | 14 | **10 kΩ** (R) | R-2R series links |
+| C1–C6 | 6 | 0.1 µF | decoupling, one per IC |
+| U1, U2, U3 | 3 | 74HC374 | the latches (HC, not LS) |
+| U4 | 1 | **MCP6002** | rail-to-rail dual op-amp — *not* MCP602 (same DIP-8 pinout) |
+| U5 | 1 | 74HC74 | Z-blank FF — optional; tie unused pins 11 & 12 to GND |
+| U6 | 1 | GAL16V8 | program with [`dac_decode.pld`](dac_decode.pld) (ATF16V8 ok) |
+| J1 | 1 | 1×20 header, 2.54 mm | MasterLab **lower** bus strip |
+| J2 | 1 | 1×11 header, 2.54 mm | MasterLab **upper** bus strip |
+| J3 | 1 | 1×2 header | scope output — pin 1 = X, pin 2 = Y |
+| J4 | 1 | DC barrel jack | power input — **5 V only**, center + |
+| J5 | 1 | 1×2 header | Z-blank output — pin 1 = Q, pin 2 = /Q (optional) |
+| J6 | 1 | 1×1 header | GND reference / scope ground |
+
+Use **0.1 % (or matched) ladder resistors** for a monotonic 8-bit DAC, keeping
+the 2R = 2×R ratio. The intentional no-connects (unused bus pins, spare GAL I/O,
+the spare '74 half) generate a harmless "single-pad net" warning on export.
+
 ## Powering the board
 
 On a real unit the MasterLab's supply is **9 V DC @ 350 mA** (check the brick's
