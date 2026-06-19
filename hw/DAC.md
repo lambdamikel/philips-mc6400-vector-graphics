@@ -256,11 +256,54 @@ Image: from the MC6400 manual, via the
   position/gain knobs to centre and size the figure.
 - For a centred ±2.5 V swing, use the op-amp as a difference amp subtracting a
   2.5 V reference instead of a plain follower.
-- **Z/blank (optional):** if the scope has a rear Z (intensity) input, drive it
-  from the Z flip-flop (blank = beam off during retrace) for a perfectly clean
-  wireframe.  Without it you'll see faint retrace lines on a non-blanking scope —
-  but the demos avoid this by drawing in one continuous stroke. You can also
-  blank using an INS8070 flag output (`F1/F2/F3`) instead of the `0xE002` latch.
+- **Z/blank (optional):** on a scope with a Z (intensity) input you can blank the
+  beam during retrace for a perfectly clean wireframe — see **Optional: Z-blank**
+  below. Not needed for a DSO, and the continuous-route demos avoid retrace
+  anyway, so leave it unpopulated unless you want it.
+
+## Optional: Z-blank (analog scopes only)
+
+The '374 DAC drives X and Y only; it has no beam control. On an analog scope with
+a **Z-axis / intensity input**, one half of a **74HC74** (or 74LS74) D flip-flop
+adds **1-bit beam blanking** so retrace moves don't draw. (A DSO has no Z input —
+skip this entirely.)
+
+**How it's used:** the CPU writes `0xE002` with **D0 = blank bit** (1 = beam off,
+0 = beam on). The GAL's `ZCLK` (in [`dac_decode.pld`](dac_decode.pld)) pulses on
+that write, the flip-flop latches D0, and `Q` holds the blank state — driving the
+scope's Z input — until the next `0xE002` write. The interpolated cube's `DRAWLN`
+already does this (Z=1 to blank the jump to each edge's start, Z=0 to draw); the
+continuous-route programs (torus, sphere, cube_key) don't write Z at all.
+
+**Wiring (74xx74, one flip-flop — FF1):**
+
+```
+   pin 1  /CLR1  ->  +5 V        (or tie to a power-on reset; see notes)
+   pin 2   D1    <-  data bus D0 (already on the board — just branch it)
+   pin 3   CLK1  <-  ZCLK        (from the GAL; rising edge as NWDS releases)
+   pin 4  /PRE1  ->  +5 V        (inactive)
+   pin 5   Q1    ->  scope Z / intensity input
+   pin 6  /Q1    ->  use instead of Q1 if your scope blanks on a LOW
+   pin 7   GND -> GND      pin 14  VCC -> +5 V      (0.1 uF across them)
+```
+
+**The Q → Z connection is scope-specific.** Check your scope's Z-input spec first:
+which polarity blanks, what voltage level, and whether it's DC- or AC-coupled (you
+want DC so a held blank stays held). Defaults: blank = `Q` HIGH; if your scope
+blanks on a LOW use `/Q` (pin 6); if it needs a larger swing or a specific
+level/current, add a transistor + resistor to drive it. Prefer **74HC74** over LS
+— HC swings a clean 0/5 V, whereas LS only reaches ~3.4 V HIGH (marginal for some
+Z inputs).
+
+**Notes:**
+- **Power-on state** is random — `Q` could come up blanking. Tie `/CLR` to a
+  power-on reset for a known unblanked start, or just rely on the first `0xE002`
+  write (≤1 frame of possible dark flash). Tying `/PRE`+`/CLR` high and letting
+  software manage the state is simplest.
+- This is **1-bit (on/off) only**. True intensity depth-cueing (near edges
+  brighter than far) would need a small Z **DAC** instead of the flip-flop.
+- Alternative: you can blank from an INS8070 flag output (`F1/F2/F3`) instead of
+  the `0xE002` latch, if you'd rather not add the chip.
 
 ## Bring-up / test
 
