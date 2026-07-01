@@ -13,3 +13,6 @@ __pycache__/
 .claude/
 .DS_Store
 *.swp
+vector_slew_builds/
+GITHUB_HANDOVER_VECTOR_SCOPE_FIXES.zip
+build/

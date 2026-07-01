@@ -9,10 +9,11 @@ This is the companion hardware for the demos.  It is the first known
 expansion-port peripheral for the MasterLab, so the address map below is *our*
 choice — nothing on the stock machine uses the `0xE000` block.
 
-> **Status:** this is a *paper design* — it has not been built or tested on real
-> hardware yet. It was designed alongside the cycle-accurate simulator, which
-> models the double-buffered behaviour exactly, but expect to tune timing/levels
-> on first build.
+> **Status: BUILT AND TESTED on real hardware (July 2026).** This board was
+> assembled and verified on a real Philips MC6400 driving a Tektronix 2335 analog
+> oscilloscope — it draws solid, rotating 3-D vector wireframes. The one change
+> the simulator did not predict was the **RC slew-limit on the outputs** (see
+> below), which turned out to be *required* to get vector lines instead of dots.
 
 ## For a digital scope (e.g. Hantek DSO5072P)
 
@@ -276,11 +277,56 @@ Image: from the MC6400 manual, via the
 
 ## Output / scope setup
 
-- Each ladder → op-amp **unity follower** → scope X (and Y) input, giving
-  ~0–5 V per axis.  Set the scope to **X-Y mode**, DC-coupled, and use the
-  position/gain knobs to centre and size the figure.
+**Use a true analog scope** — we built and tested this on a **Tektronix 2335**.
+A digital storage scope (DSO) will *not* reconstruct clean vectors in X-Y mode
+(see the [README](../README.md) for why), so an analog CRT is strongly
+recommended for this project.
+
+- Each ladder → op-amp **unity follower** → **RC slew-limit (required — see next
+  section)** → scope X (and Y) input, ~0–5 V per axis. Set the scope to **X-Y
+  mode**, DC-coupled, and use the position/gain knobs to centre and size the figure.
 - For a centred ±2.5 V swing, use the op-amp as a difference amp subtracting a
   2.5 V reference instead of a plain follower.
+
+## Required for vector *lines*: an RC slew-limit on each output
+
+This DAC is a **step** DAC: writing a new (X, Y) makes the op-amp jump to the new
+voltage in a few microseconds, and the CPU then parks there ~100–200 µs while it
+computes the next point. So the beam spends almost all its time sitting on the
+**vertices** (bright dots) and only microseconds sliding between them
+(near-invisible) — out of the box you get a **dotted** figure, not solid lines.
+This was the single biggest surprise of the whole project, and it is *not*
+obvious until you try it on real hardware.
+
+The fix is to make the DAC draw lines the way a real vector display does: force
+the beam to move at a roughly constant, visible speed between points by
+**slew-limiting each output** with a simple RC low-pass. Each DAC step becomes a
+**ramp**, the beam sweeps continuously along it, and the dots merge into solid,
+uniform-brightness vectors.
+
+```
+ MCP6002 OUT ──[ R ]──┬──► J3  (to scope CH1 / CH2)
+                      │
+                     [ C ]
+                      │
+                     GND
+```
+
+- **Values:** **R = 4.7 kΩ**, **C ≈ 15 nF** (τ = RC ≈ 70 µs). We used
+  10 nF ∥ 4.7 nF = 14.7 nF. Anything giving **τ ≈ 50–80 µs** works — tune by eye.
+- **Match X and Y exactly** (same R, same C). Mismatched time constants bow
+  diagonal edges into curves.
+- The series R also isolates the follower from the capacitive load (stability),
+  and with the scope's 1 MΩ input gives <0.5 % DC error — endpoints still land in
+  the right place; only the *transitions* are slowed.
+- **Too much C** rounds the corners and shrinks the figure (the ramp never
+  reaches each endpoint before the beam moves on); **too little** and it stays
+  dotty. There is a clear sweet spot.
+- The matching programs stream only the wireframe **endpoints** and dwell
+  ~2–3 τ per point so the ramp just reaches each corner before the next.
+
+It's a two-resistor, two-capacitor add-on you can tack straight onto J3. Without
+it you get dots; with it, solid analog vectors (see the README photos).
 - **Z/blank (optional):** on a scope with a Z (intensity) input you can blank the
   beam during retrace for a perfectly clean wireframe — see **Optional: Z-blank**
   below. Not needed for a DSO, and the continuous-route demos avoid retrace

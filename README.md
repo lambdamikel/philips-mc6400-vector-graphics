@@ -1,249 +1,291 @@
 # Philips MC6400 Vector Graphics
 
 **Real-time 3-D wireframe vector graphics — a rotating cube, torus, and sphere —
-drawn on an X-Y oscilloscope, computed live in INS8070 machine code on a 1984
-Philips MC6400 "MasterLab" CPU trainer.**
+drawn on an analog X-Y oscilloscope, computed live in INS8070 machine code on a
+1984 Philips MC6400 "MasterLab" CPU trainer.**
 
 The MasterLab has a 1 MHz [National INS8070](https://en.wikipedia.org/wiki/National_Semiconductor_SC/MP)
-(SC/MP III) CPU and **1 KB of RAM**. With a small home-made R-2R DAC on its
-expansion bus, it drives a scope in X-Y mode and tumbles wireframe solids in
-real time — perspective projection, hardware-multiply rotation, and interactive
-hex-pad control, all in well under a kilobyte of code.
+(SC/MP III) CPU and **1 KB of RAM**. With a small home-made **R-2R DAC** on its
+expansion bus — plus one tiny analog trick (an [RC slew-limit](#the-one-surprise-you-need-an-rc-slew-limit),
+see below) — it drives a scope in X-Y mode and tumbles solid wireframe solids in
+real time, all in **well under a kilobyte** of code.
 
 Programs are loaded onto the machine with
 **[PicoRAM Ultimate](https://github.com/lambdamikel/picoram-ultimate)** — a
 Raspberry Pi Pico-based (S)RAM/ROM emulator and SD-card interface for vintage
-single-board computers and CPU trainers, including the MC6400.
+single-board computers. As far as I know this is the **first expansion-port
+peripheral ever built for the MasterLab**.
 
-As far as I know this is the **first expansion-port peripheral ever built for the
-MasterLab**.
+<p align="center">
+  <img src="media/setup1.jpg" width="90%" alt="MC6400 + R-2R DAC driving a Tektronix 2335 analog scope showing a vector cube"/>
+</p>
+
+<p align="center"><em>The full rig: a Philips MC6400 with the home-made R-2R DAC on its
+expansion bus (right), driving a Tektronix 2335 analog oscilloscope in X-Y mode (left) —
+drawing a solid, rotating 3-D cube. Everything runs live in under 1 KB.</em></p>
 
 > **How this was made.** Every line of code, all of the tooling (the INS8070
 > assembler, cycle-accurate simulator, and oscilloscope renderer), all of the
 > assembly programs, and the R-2R DAC hardware design in this repository were
-> written by **Claude Code (Claude Opus 4.8)**, working under my direction. I
-> (Michael Wessel) supplied the hardware, the MC6400 manual and INS8070
-> references, the goals and design choices, and the testing and feedback at each
-> step — Claude did the implementation, from the assembler all the way to the
-> rotating sphere.
-
-<p align="center">
-  <img src="media/cube.gif" width="30%" alt="rotating cube"/>
-  <img src="media/torus.gif" width="30%" alt="rotating torus"/>
-  <img src="media/sphere.gif" width="30%" alt="rotating sphere"/>
-</p>
-
-*(These are renders from the cycle-accurate simulator, modelling the analog
-oscilloscope beam. They are produced by the exact byte stream the real CPU sends
-to the DAC.)*
+> written by **Claude (Anthropic, Opus 4.8)** working under my direction, from
+> the assembler all the way to the rotating sphere and the on-hardware bring-up.
+> I (Michael Wessel) supplied the hardware, the MC6400 manual and INS8070
+> references, the goals and design choices, and — crucially for this project —
+> the **testing and feedback on the real scope at every step**.
 
 ---
 
-## Status: runs on real hardware via PicoRAM; DAC not yet built
+## Status: built and running on real hardware ✅
 
-**Confirmed on a real Philips MC6400 (loaded via [PicoRAM Ultimate](https://github.com/lambdamikel/picoram-ultimate)):**
-the programs run on actual hardware — at full speed (the on-board display
-heartbeat advances at the expected frame rate) and with no hangs. So the INS8070
-machine code, the PicoRAM RAM emulation under this tight all-in-RAM loop, the
-program start-up, and the display I/O all work on real silicon, and the
-cycle-accurate simulator (validated against the machine's real monitor ROM and a
-bit-exact math reference) matches the hardware's behaviour.
+The R-2R DAC is **built and verified on a real Philips MC6400**, driving a
+**Tektronix 2335 analog oscilloscope**. It draws **solid, continuously-rotating
+3-D vector wireframes** — cube, torus, and sphere — live, in under 1 KB of
+INS8070 machine code each. The photos below are the real scope, not renders.
 
-**Not yet built: the DAC.** The R-2R DAC is still a paper design — it hasn't been
-built, so the actual oscilloscope output hasn't been produced on hardware yet
-(the demo GIFs are simulator renders). Things that may need tuning on the first
-DAC build:
+<p align="center">
+  <img src="media/cube.jpg" width="32%" alt="vector cube on the 2335"/>
+  <img src="media/torus.jpg" width="32%" alt="vector torus on the 2335"/>
+  <img src="media/sphere.jpg" width="32%" alt="vector sphere on the 2335"/>
+</p>
+<p align="center"><em>Cube, torus, and sphere — solid analog vectors on a Tektronix 2335,
+computed and streamed live by the MC6400.</em></p>
 
-- **DAC latch timing.** The design latches the data bus on the write-strobe edge;
-  the real INS8070 bus setup/hold may need the decode tweaked or a small delay
-  added.
-- **Analog side.** R-2R resistor matching, op-amp choice/levels, and the extra
-  bus loading from the add-on are untested.
+---
 
-Bug reports and fixes from anyone who builds the DAC are very welcome.
+## The one surprise: you need an RC slew-limit
 
-**Heartbeat — verify it runs before you build anything.** Every program also
-drives the MasterLab's built-in 7-segment display with a single segment that
-rotates one step per frame. So you can load a `.RAM` over PicoRAM and confirm the
-program is alive — and roughly how fast it's running — from the on-board display
-alone, **before building any of the DAC hardware**. Spinning = running; frozen =
-crashed/hung. (It uses display digit 0, I/O at `0xFD0x`/`0xFD1x`; it does not
-touch the DAC.)
+Getting from "it runs" to "you can see vectors" turned out to be the whole story
+of the hardware bring-up, and it's worth documenting because it is **not
+obvious** and it bites everyone the first time.
 
-## What's in the box
+**The problem — dots, not lines.** The DAC is a *step* DAC. Writing a new (X, Y)
+makes the op-amp jump to the new voltage in a few microseconds; the CPU then
+parks there ~100–200 µs while it computes the next point. So the beam spends
+almost all of its time sitting on the **vertices** (bright dots) and only
+microseconds sliding between them (near-invisible). Out of the box you get a
+recognisable but **dotted** figure — never solid lines — no matter how you set up
+the scope. Cranking the intensity just blooms the dots.
 
-A complete, self-contained project — built from scratch in Python with no
-external assembler or emulator:
+**Why the scope's own "vectors" don't save you.** An *analog* scope has no
+"vector mode" — its beam is always drawing wherever X,Y are; the issue is purely
+that it flies between points too fast to light them. A *digital storage scope*
+does have a "Display Vectors" option, but in X-Y it connects consecutive
+*samples in acquisition order*, sampled asynchronously to the DAC with a
+bandwidth-limited horizontal channel — so DSOs are simply poor X-Y vector
+monitors (see [Scopes](#scopes-use-an-analog-crt)). We chased this for a while
+before realising it's fundamental.
 
-| Part | What |
-|------|------|
-| **`asm/asm8070.py`** | A two-pass **INS8070 assembler** (handles the chip's off-by-one PC, `0xFF00`-page direct addressing, etc.) |
-| **`sim/ins8070.py`** | A **cycle-accurate INS8070 simulator** with a virtual DAC + keypad. Validated by running the real MasterLab monitor ROM. |
-| **`sim/render.py`** | An **X-Y oscilloscope renderer** — models the analog beam (sub-pixel, intensity ∝ dwell) → PNG/GIF. |
-| **`asm/*.asm`** | The demos: cube (ortho / perspective / interactive), torus, sphere. |
-| **`tools/gen_obj.py`** | Procedurally generates the torus & sphere meshes → ready-to-assemble `.asm`. |
-| **`tools/make_ram.py`** | Exports an assembled binary to PicoRAM `.RAM` format (load from SD card). |
-| **`hw/DAC.md`** | Schematic, BOM, and wiring for the **R-2R DAC** that hangs off the expansion bus. |
-| **`ram/`** | Pre-built `.RAM` files — drop on an SD card and run. |
+**The fix — draw the lines in hardware.** Real vector displays (Vectrex,
+Asteroids, Tektronix storage tubes) move the beam at a *constant velocity*
+between endpoints so the whole line lights evenly. You can approximate that on
+this DAC with a two-part, reversible add-on: **slew-limit each output with an RC
+low-pass**, so every DAC *step* becomes a *ramp*. The beam then sweeps
+continuously along each edge — the dots merge into **solid, uniform-brightness
+vectors** — and the CPU only has to output the wireframe **endpoints**.
+
+```
+ MCP6002 OUT ──[ R ]──┬──► scope CH1 / CH2
+                      │
+                     [ C ]
+                      │
+                     GND
+```
+
+- **R = 4.7 kΩ, C ≈ 15 nF** (τ ≈ 70 µs). We used 10 nF ∥ 4.7 nF = 14.7 nF.
+  τ ≈ 50–80 µs is the sweet spot — tune by eye.
+- **Match X and Y** (same R, same C) or diagonals bow into curves.
+- Too much C rounds corners / shrinks the figure; too little stays dotty.
+
+Full details and the tuning rationale are in **[`hw/DAC.md`](hw/DAC.md)**.
+
+<p align="center">
+  <img src="media/rc.jpg" width="55%" alt="the RC slew-limit tacked onto the DAC outputs"/>
+</p>
+<p align="center"><em>The whole fix: a series resistor and a shunt capacitor per axis,
+tacked onto the DAC's output header. Dots → solid vectors.</em></p>
+
+The software side is matched to this: the programs stream **only the wireframe
+endpoints** and dwell ~2–3 τ per point so the ramp just reaches each corner
+before the beam moves on.
+
+---
+
+## Scopes: use an analog CRT
+
+**Use a true analog oscilloscope.** We built and tested this on a **Tektronix
+2335** (a lovely 100 MHz analog scope), and that is what we recommend. On an
+analog CRT the electron beam draws smooth, bright, continuous vectors, and with
+the RC slew-limit in place the result is genuinely beautiful.
+
+**A digital storage scope (DSO) is *not* recommended** for this. Despite the
+common assumption (which this project's earlier notes shared, and which turned
+out to be wrong), DSOs do a poor job of X-Y *vector* display: they store and
+plot sample points, their "vectors/interpolation" connects samples in time-order
+rather than following the analog beam path, and their horizontal channel is
+second-class. Some DSOs with **infinite/auto persistence** will *accumulate* the
+dots into a filled figure over many frames — so you may see *something* — but it
+won't look like a real vector display, and it defeats the point.
+
+**Analog X-Y setup (Tek 2335 and similar):** CH1 = X, CH2 = Y; press the CH1 and
+CH2 vertical-mode buttons together for **X-Y mode**; **DC coupling** on both;
+start ~0.5–1 V/div and centre with the position knobs; keep intensity moderate,
+then adjust focus/astigmatism.
+
+---
 
 ## The programs
 
-| `.RAM` | Object | Projection | Interactive | Refresh |
-|--------|--------|-----------|-------------|---------|
-| `ram/CUBE.RAM` | cube | orthographic | – | ~25 Hz |
-| `ram/CUBE_PERSP.RAM` | cube | perspective | – | ~20 Hz |
-| `ram/CUBE_KEY.RAM` | cube | perspective | **yes** | ~19 Hz |
-| `ram/TORUS.RAM` | torus | orthographic | **yes** | ~9.6 Hz |
-| `ram/SPHERE.RAM` | sphere | orthographic | **yes** | ~13 Hz |
+The current, hardware-tested set — each is a **standalone, auto-rotating**
+1 KB program:
 
-Interactive controls (MasterLab green hex keys): **4/6** yaw, **2/8** pitch,
-**5** freeze, **0** reset. Control is velocity-based — nudge it and it keeps
-spinning on its own.
+| `.RAM` | Object | Size | What |
+|--------|--------|-----:|------|
+| [`ram/CUBE.RAM`](ram/CUBE.RAM) | perspective cube | 701 B | 8 vertices, 12 edges, perspective projection |
+| [`ram/TORUS.RAM`](ram/TORUS.RAM) | torus | 773 B | wireframe mesh, streamed as one continuous route |
+| [`ram/SPHERE.RAM`](ram/SPHERE.RAM) | sphere | 683 B | wireframe mesh, streamed as one continuous route |
 
-<p align="center">
-  <img src="media/cube.png" width="32%" alt="cube"/>
-  <img src="media/torus.png" width="32%" alt="torus"/>
-  <img src="media/sphere.png" width="32%" alt="sphere"/>
-</p>
+Sources are [`asm/cube.asm`](asm/cube.asm), [`asm/torus.asm`](asm/torus.asm),
+[`asm/sphere.asm`](asm/sphere.asm). Each rotates automatically about two axes;
+there is no keypad control in this set (**interactive control is on the
+roadmap** — see [Roadmap](#roadmap)).
+
+### Heartbeat — the front panel stays alive
+
+Each program marches a lit LED across the MasterLab's **F1 → F2 → F3** front-panel
+LEDs, one step per frame, as an "it's alive / this fast" indicator (~0.3 Hz on
+the cube). These are the INS8070's **status-register flag outputs** (they latch —
+no display multiplexing needed), so the heartbeat costs nothing and doesn't touch
+the DAC or the beam. Marching = running; frozen = crashed.
+
+> A note on the display: an earlier heartbeat drove the 8-digit 7-segment
+> display, but that display is **multiplexed** (it needs continuous scanning to
+> stay lit) and can't be driven from a once-per-frame write without stealing beam
+> time — so the F1/F2/F3 status LEDs are the clean choice.
+
+---
 
 ## How it works
 
 **Each frame** the CPU rotates the object's vertices about two axes, projects
-them to 2-D, and streams the result to the DAC:
+them to 2-D, and streams the wireframe **endpoints** to the DAC; the analog RC
+draws the edges between them.
 
-- **Fixed-point rotation** using the INS8070's *unsigned* hardware `MPY` (16×16→32,
-  37 cycles) with sign handled by hand, and a 64-entry ×64 sine table. The cube's
-  perspective version uses the hardware `DIV` for the perspective divide.
-- **The R-2R DAC is double-buffered** (3× 74HC374): writing X loads a holding
-  latch, writing Y commits *both* axes on one clock edge — so the beam jumps
-  straight to (x, y) instead of stair-stepping.
+- **Endpoints-only, RC-drawn lines.** The CPU emits only the vertices of the
+  wireframe; the [RC slew-limit](#the-one-surprise-you-need-an-rc-slew-limit) on
+  the outputs turns each jump into a continuously-drawn line. The per-vertex
+  dwell is tuned to the RC time constant so the beam just reaches each corner.
 - **One continuous stroke.** The wireframe is drawn as a single unbroken path
-  (a retrace-minimizing route for the cube; an **Eulerian circuit** of the mesh
-  for the torus/sphere, which are 4-regular graphs). That means **no beam jumps
-  to blank** — so it looks clean on *digital* scopes too (no Z-axis needed), and
-  the curved meshes can be drawn by simply streaming vertices and letting the
-  beam connect them.
+  (a retrace-minimising route for the cube; an **Eulerian circuit** of the mesh
+  for the torus/sphere, which are 4-regular graphs). The pen never lifts — no
+  wasted retrace lines, no Z-blanking needed.
+- **Double-buffered DAC** (3× 74HC374): writing X loads a holding latch, writing
+  Y commits *both* axes on one clock edge — so the beam moves in a straight
+  diagonal to (x, y) instead of an L-shaped staircase.
+- **Fixed-point rotation** using the INS8070's *unsigned* hardware `MPY`
+  (16×16→32) with sign handled by hand, and a 64-entry ×64 sine table. The
+  cube's perspective divide uses the hardware `DIV`.
 
-There are two fun INS8070 gotchas documented in the code: **`A` is the low byte
-of `EA`** (so `LD A` silently clobbers a 16-bit result), and the double-buffering
-trick above (without it the beam draws L-shaped jogs between points).
+Two INS8070 gotchas are documented in the code: **`A` is the low byte of `EA`**
+(so `LD A` silently clobbers a 16-bit result), and the double-buffering trick
+above (without it the beam draws L-shaped jogs between points).
 
-## How it was built — the development pipeline
+---
 
-There was no INS8070 assembler or emulator on hand, and no way to *see* the
-oscilloscope output without hardware. So the whole thing was bootstrapped in
-Python and developed in a tight **assemble → simulate → render → inspect** loop —
-every feature was verified as an image on a virtual scope before any hardware
-existed.
+## The toolchain (all from scratch, in Python)
 
-```
-   asm/*.asm ──[asm8070.py]──▶ bytes ──[ins8070.py sim]──▶ (X,Y) DAC stream
-       ▲                                                          │
-       │                                                    [render.py]
-       └────────── inspect · diagnose · fix ◀── PNG / GIF ◀───────┘
+There was no INS8070 assembler or emulator on hand, and — at first — no way to
+*see* oscilloscope output without hardware. So the whole thing was bootstrapped
+in Python and developed in a tight **assemble → simulate → render → inspect**
+loop, then finished on real hardware.
 
-   bytes ──[make_ram.py]──▶ .RAM ──▶ PicoRAM SD card ──▶ real MC6400 ──▶ scope
-```
+| Part | What |
+|------|------|
+| [`asm/asm8070.py`](asm/asm8070.py) | Two-pass **INS8070 assembler** (handles the chip's off-by-one PC, `0xFF00`-page direct addressing, etc.) |
+| [`sim/ins8070.py`](sim/ins8070.py) | **Cycle-accurate INS8070 simulator** with a virtual DAC + keypad. Validated by running the real MasterLab monitor ROM. |
+| [`sim/render.py`](sim/render.py) | **X-Y oscilloscope renderer** — models the analog beam (sub-pixel, intensity ∝ dwell) → PNG/GIF. |
+| [`tools/gen_obj.py`](tools/gen_obj.py) | Procedurally generates the torus & sphere meshes → ready-to-assemble `.asm`. |
+| [`tools/make_ram.py`](tools/make_ram.py) | Exports an assembled binary to PicoRAM `.RAM` format (load from SD card). |
+| [`hw/DAC.md`](hw/DAC.md) | Schematic, BOM, wiring, and the **RC slew-limit** for the R-2R DAC. |
 
-**1. Reverse-engineering the machine.** The CPU (INS8070), clock (1 MHz), memory
-map (ROM `0x0000–0x0FFF`, RAM `0x1000–0x13FF`, on-board I/O `0xFD0x`, fast
-internal RAM `0xFFC0–0xFFFF`), and the expansion-bus pinout were pieced together
-from the MC6400 manual, the INS8070 datasheets, and — invaluably — Thorsten
-Brehm's emulator source. The unused `0xE000` block was chosen for the DAC.
+The simulator was validated against ground truth by **running the real MasterLab
+monitor ROM** (reproducing its multiplexed 7-segment scan); the `MPY`/`DIV`
+instructions were unit-tested; and a Python reference model checked the on-CPU
+fixed-point projection **bit-for-bit**. The simulator renders below are produced
+from the exact byte stream the real CPU sends to the DAC:
 
-**2. A from-scratch toolchain.** Three Python tools, none pre-existing: the
-[assembler](asm/asm8070.py) (exploits the regular opcode structure and encodes
-the INS8070's off-by-one program counter), the [simulator](sim/ins8070.py)
-(cycle-accurate, with a virtual DAC and keypad), and the
-[renderer](sim/render.py) (an analog-beam model → image).
+<p align="center">
+  <img src="media/cube.gif" width="30%" alt="simulated cube"/>
+  <img src="media/torus.gif" width="30%" alt="simulated torus"/>
+  <img src="media/sphere.gif" width="30%" alt="simulated sphere"/>
+</p>
 
-**3. Validation against ground truth.** Trust was earned, not assumed: the
-simulator was validated by **running the real MasterLab monitor ROM**, which
-reproduced the machine's genuine multiplexed 7-segment display scan; the hardware
-`MPY`/`DIV` instructions were unit-tested; and a Python **reference model**
-([`cube_ref.py`](tools/cube_ref.py)) of the exact fixed-point math let the on-CPU
-projection be checked **bit-for-bit** at every step.
-
-**4. Incremental, visual development.** Each capability was built and *seen*
-before the next: a single DAC dot → a line engine → a static baked cube → live
-rotation → perspective → keypad control → torus → sphere → speed optimization.
-Bugs surfaced on screen and were diagnosed in the simulator — a stray-line glitch
-turned out to be a signed-byte overflow in the line engine; a staircase artifact
-revealed that the DAC must be **double-buffered** (which then shaped the
-hardware); and a projection that collapsed to a point was traced, by
-single-stepping the simulator, to the INS8070 quirk that **`A` is the low byte of
-`EA`** (so `LD A` was silently clobbering a 16-bit result).
-
-**5. Hardware co-designed in the loop.** Two hardware decisions came straight out
-of the simulator: the **double-buffered 3-latch DAC** (so X and Y update on the
-same edge), and the **DSO-friendly single-stroke drawing** — verified by
-rendering with blanking disabled, which is exactly how a digital scope behaves.
-
-**6. Onto the real machine.** Finished programs are exported to PicoRAM's `.RAM`
-format and loaded over SD card — the format itself checked by a round-trip back
-through the simulator.
+---
 
 ## Build & run
 
-Everything is plain Python 3 + ImageMagick (for rendering). No Node, no `asl`.
+Plain Python 3 + ImageMagick (for rendering). No external assembler or emulator.
 
 ```bash
 # assemble a program
-python3 asm/asm8070.py asm/cube_persp.asm -o build/cube.bin -l
+python3 asm/asm8070.py asm/cube.asm -o build/cube.bin -l
 
-# simulate + render an animated GIF of the scope output
+# export to a PicoRAM .RAM file for the real machine
+python3 tools/make_ram.py build/cube.bin ram/CUBE.RAM
+
+# simulate + render a GIF of the scope output (optional, no hardware needed)
 python3 - <<'PY'
 import sys; sys.path[:0] = ["sim", "asm"]
 from asm8070 import Assembler
 from ins8070 import INS8070
 import render
-code = Assembler().assemble(open("asm/cube_persp.asm").read())[1]
+code = Assembler().assemble(open("asm/cube.asm").read())[1]
 cpu = INS8070(); cpu.load(0x1000, code); cpu.reset(pc=0x1000)
 cpu.run(max_steps=4_000_000)
 render.render_gif(cpu, "cube.gif", fps=20, max_frames=64)
 PY
-
-# (re)generate the torus / sphere mesh
-python3 tools/gen_obj.py torus  asm/torus.asm
-python3 tools/gen_obj.py sphere asm/sphere.asm
-
-# export to a PicoRAM .RAM file for the real machine
-python3 tools/make_ram.py build/cube.bin ram/CUBE_PERSP.RAM
 ```
 
-On real hardware: load a `.RAM` file via
-[PicoRAM Ultimate](https://github.com/lambdamikel/picoram-ultimate) (SD card),
-build the [DAC](hw/DAC.md), wire it to the expansion bus, connect to a scope in
-X-Y mode, and RUN.
+**On real hardware:**
 
-## The hardware
+1. Build the **[R-2R DAC](hw/DAC.md)** and add the **RC slew-limit** on the X/Y
+   outputs (matched R/C).
+2. Load a `.RAM` file via **[PicoRAM Ultimate](https://github.com/lambdamikel/picoram-ultimate)**
+   (SD card) and **RUN** — confirm the F1/F2/F3 heartbeat marches.
+3. Wire the DAC's X/Y to an **analog scope** in **X-Y mode**, DC-coupled; centre
+   and size with the position/gain knobs. Enjoy the vectors.
 
-A 2-channel 8-bit **R-2R ladder DAC** on the expansion connector — full details,
-schematic, and bill of materials in **[`hw/DAC.md`](hw/DAC.md)**. Decode the
-`0xE000` block off the bus, latch the data bus on the write strobe, three
-74HC374s for double-buffering, two resistor ladders, two op-amp buffers. Powered
-from the bus's +5 V.
+<p align="center">
+  <img src="media/dac.jpg" width="42%" alt="the built R-2R DAC board"/>
+  <img src="media/setup2.jpg" width="42%" alt="the full test setup"/>
+</p>
+<p align="center"><em>Left: the built DAC — three 74HCT374 latches, two R-2R ladders, the
+address-decode GAL, and an MCP6002 output buffer, on the expansion connector. Right: the
+bring-up setup.</em></p>
 
-## A note on scopes
+---
 
-A true **analog CRT** scope is ideal for this — a real electron beam draws
-smooth, bright, continuous vectors with phosphor persistence. A modern **digital
-storage scope (DSO)** also works (the demos are designed to be DSO-friendly:
-single continuous stroke, no blanking required) — set it to **X-Y mode**, CH1=X
-CH2=Y, **DC coupling**, **vectors/trace** (not dots), and **persistence on**.
-The output is the same analog X/Y either way; the analog scope just looks nicer.
+## Roadmap
 
-<p align="center"><img src="media/dso_vs_analog.png" width="60%" alt="analog vs DSO rendering"/></p>
+- **Interactive control.** Bring back hex-keypad control (yaw/pitch/zoom/freeze)
+  on top of the endpoints-only + RC drawing model.
+- More objects and per-object tuning; optional Z-blank for scopes that have a Z
+  input.
 
-## Credits
+---
 
-- The **MasterLab MC6400 emulator** by Thorsten Brehm —
-  [ThorstenBr/MasterLab-MC6400](https://github.com/ThorstenBr/MasterLab-MC6400)
-  — was the reference for the INS8070 instruction semantics (and a great
-  validation oracle). The simulator here is a Python port of that CPU model.
-- **PicoRAM Ultimate** — [lambdamikel/picoram-ultimate](https://github.com/lambdamikel/picoram-ultimate)
-  — loads these programs into the machine over SD card, and documented the
-  expansion-bus pinout.
+## Credits & acknowledgements
+
+- **[PicoRAM Ultimate](https://github.com/lambdamikel/picoram-ultimate)** loads
+  these programs into the machine over SD card, and documented the expansion-bus
+  pinout.
+- The **[MasterLab MC6400 emulator](https://github.com/ThorstenBr/MasterLab-MC6400)**
+  by Thorsten Brehm was the reference for the INS8070 instruction semantics and a
+  great validation oracle; the simulator here is a Python port of that CPU model.
+- During the hardware bring-up, various scope-specific program variants were
+  explored (including some generated with OpenAI's GPT) while we worked out why
+  the display was dotted. Those experiments helped pin down the problem, but the
+  programs shipped here are the clean, unified solution: **endpoints-only drawing
+  + an RC slew-limit on the DAC**, tested on the real analog scope.
 
 ## License
 
