@@ -24,6 +24,15 @@ peripheral ever built for the MasterLab**.
 expansion bus (right), driving a Tektronix 2335 analog oscilloscope in X-Y mode (left) —
 drawing a solid, rotating 3-D cube. Everything runs live in under 1 KB.</em></p>
 
+<p align="center">
+  <a href="https://youtu.be/bAo9eb0MnI4">
+    <img src="media/youtube.png" width="70%" alt="Watch the demo on YouTube: MC6400 vector graphics on a Tektronix 2335"/>
+  </a>
+</p>
+
+<p align="center"><em>▶ <b><a href="https://youtu.be/bAo9eb0MnI4">Watch the demo on YouTube</a></b> —
+the MC6400 tumbling solid 3-D wireframes live on the Tektronix 2335.</em></p>
+
 > **How this was made.** Every line of code, all of the tooling (the INS8070
 > assembler, cycle-accurate simulator, and oscilloscope renderer), all of the
 > assembly programs, and the R-2R DAC hardware design in this repository were
