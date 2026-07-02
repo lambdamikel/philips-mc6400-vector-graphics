@@ -21,6 +21,7 @@ NAL     EQU   6
 GRPY0   EQU   174
 SAM     EQU   2
 SDS     EQU   12
+RAMPK   EQU   3               ; descent added per cleared wave (0 = no ramp; 9-alien build uses 0)
 
 REPS    EQU   4               ; redraws per logic tick (lower = faster game)
 DWCNT   EQU   12
@@ -70,11 +71,14 @@ AIDX    EQU   0xFFD8          ; 16-bit (D8 lo, D9 hi=0)
 MASK    EQU   0xFFDA
 ALIVE   EQU   0xFFDB          ; 9 bytes DB..E3
 MSGSEL  EQU   0xFFE4          ; 0 = WIN, 1 = lose (X)
+CSDS    EQU   0xFFE5          ; current descent step (base SDS, +RAMPK each cleared wave)
 
 ; ============================================================
 START:  LD    SP,=STACK
         LD    A,=128
         ST    A,GUNX
+        LD    A,=SDS            ; difficulty starts at the base descent step
+        ST    A,CSDS
         JSR   INITWAVE
 FRAME:  LD    P2,=DAC
         LD    A,=1
@@ -206,7 +210,7 @@ BOUNCE: LD    A,=0
         ADD   A,GDIR
         ST    A,GRPX
         LD    A,GRPY
-        SUB   A,=SDS
+        SUB   A,CSDS
         ST    A,GRPY
 NOMOVE: LD    A,BULACT          ; collisions
         BZ    NOCOLL
@@ -281,14 +285,19 @@ GOTROW: LD    A,=LOSEY
         LD    A,S
         AND   A,=0x80
         BZ    NORESP
-        LD    A,=1              ; overrun -> "X" then next wave
+        LD    A,=1              ; overrun -> "X", reset difficulty, next wave
         ST    A,MSGSEL
         JSR   FLASH
+        LD    A,=SDS
+        ST    A,CSDS
         JSR   INITWAVE
         BRA   NORESP
-DOWIN:  LD    A,=0              ; cleared -> "WIN!" then next wave
+DOWIN:  LD    A,=0              ; cleared -> "WIN", ramp descent, next wave
         ST    A,MSGSEL
         JSR   FLASH
+        LD    A,CSDS
+        ADD   A,=RAMPK
+        ST    A,CSDS
         JSR   INITWAVE
 NORESP: LD    A,=0              ; F-LED aliens-left bar
         ST    A,MASK

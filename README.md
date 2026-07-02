@@ -172,9 +172,11 @@ game** — a turret, a descending grid of hexagon "aliens", and a bullet — run
 on the same endpoints-only + RC pipeline, the whole thing in **under 1 KB**.
 
 <p align="center">
-  <img src="media/shooter2.jpg" width="60%" alt="the shooter running on a Tektronix 2335: turret, a bullet in flight, and hex aliens"/>
+  <img src="media/shooter1.jpg" width="48%" alt="full alien wave and turret on a Tektronix 2335"/>
+  <img src="media/shooter2.jpg" width="48%" alt="mid-game on the 2335: a column already cleared and a bullet in flight"/>
 </p>
-<p align="center"><em>Playing on the real Tektronix 2335 — the turret, a bullet in flight, and the descending alien formation.</em></p>
+<p align="center"><em>Running on the real Tektronix 2335: the full wave (left), and mid-game — a
+column cleared and a bullet in flight (right).</em></p>
 
 <p align="center">
   <img src="media/shooter.gif" width="42%" alt="simulated vector shooter gameplay ending on a WIN"/>
@@ -212,6 +214,10 @@ combination is its own standalone 1 KB `.RAM` — load whichever suits the momen
 | **9** | [`SHOOTER_9_SLOW`](ram/SHOOTER_9_SLOW.RAM) | [`SHOOTER_9_MED`](ram/SHOOTER_9_MED.RAM) | [`SHOOTER_9_FAST`](ram/SHOOTER_9_FAST.RAM) |
 
 [`ram/SHOOTER.RAM`](ram/SHOOTER.RAM) is the default (6 aliens, medium).
+
+The **3- and 6-alien builds ramp up**: each cleared wave descends a little faster,
+and a loss resets it to the base speed. The **9-alien builds stay constant** — a
+full grid is already plenty — so there the difficulty is the sheer count.
 
 **Implementation notes** (all in [`asm/shooter.asm`](asm/shooter.asm)):
 
@@ -337,7 +343,8 @@ bring-up setup.</em></p>
 
 - **Interactive control — done for the game** ([The shooter](#the-shooter--a-playable-vector-game): keypad + SA/SB). Still to do: live hex-keypad control
   (yaw/pitch/zoom/freeze) of the rotating wireframes.
-- A per-wave **difficulty ramp** for the shooter (faster descent each cleared wave).
+- ~~A per-wave difficulty ramp for the shooter~~ — **done** (3- and 6-alien builds:
+  descent speeds up each cleared wave, resets on a loss).
 - More objects and per-object tuning; optional Z-blank for scopes that have a Z
   input.
 
