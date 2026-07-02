@@ -146,8 +146,8 @@ The current, hardware-tested set — each is a **standalone, auto-rotating**
 
 Sources are [`asm/cube.asm`](asm/cube.asm), [`asm/torus.asm`](asm/torus.asm),
 [`asm/sphere.asm`](asm/sphere.asm). Each rotates automatically about two axes;
-there is no keypad control in this set (**interactive control is on the
-roadmap** — see [Roadmap](#roadmap)).
+there is no keypad control in *this* set — for a fully **interactive** program on
+the same pipeline, see [The shooter](#the-shooter--a-playable-vector-game).
 
 ### Heartbeat — the front panel stays alive
 
@@ -161,6 +161,75 @@ the DAC or the beam. Marching = running; frozen = crashed.
 > display, but that display is **multiplexed** (it needs continuous scanning to
 > stay lit) and can't be driven from a once-per-frame write without stealing beam
 > time — so the F1/F2/F3 status LEDs are the clean choice.
+
+---
+
+## The shooter — a playable vector game
+
+The cube/torus/sphere prove the display can *draw*; this proves it can **play**.
+[`asm/shooter.asm`](asm/shooter.asm) is a small Space-Invaders-style **vector
+game** — a turret, a descending grid of hexagon "aliens", and a bullet — running
+on the same endpoints-only + RC pipeline, the whole thing in **under 1 KB**.
+
+<p align="center">
+  <img src="media/shooter2.jpg" width="60%" alt="the shooter running on a Tektronix 2335: turret, a bullet in flight, and hex aliens"/>
+</p>
+<p align="center"><em>Playing on the real Tektronix 2335 — the turret, a bullet in flight, and the descending alien formation.</em></p>
+
+<p align="center">
+  <img src="media/shooter.gif" width="42%" alt="simulated vector shooter gameplay ending on a WIN"/>
+</p>
+
+**Controls — two input paths, live at the same time:**
+
+- **Keypad:** `4` = left, `6` = right, `0` = fire.
+- **Console buttons:** `SA` = left, `SB` = right, `SA + SB` together = fire.
+
+The dual scheme is for the exhibit: rather than let visitors poke the machine's
+keypad, wire **three arcade buttons** to the `4`/`6`/`0` pads — *or* two big
+buttons to `SA`/`SB` — and the same ROM just works. (`SA`/`SB` are the INS8070's
+sense inputs, read straight from the status register.)
+
+**On-panel / on-screen feedback:**
+
+- The **F1 / F2 / F3** front-panel LEDs show an *aliens-remaining* bar as you play.
+- Clear the wave and a big **"WIN"** flashes in vectors; get overrun and a big
+  **"X"** flashes — then the next wave drops in automatically.
+
+<p align="center">
+  <img src="media/shooter_win.png" width="30%" alt="WIN screen drawn in vectors"/>
+  &nbsp;&nbsp;&nbsp;
+  <img src="media/shooter_x.png" width="30%" alt="lose screen: a big X"/>
+</p>
+
+**Pick a variant.** Wave size and speed are baked in at build time, so each
+combination is its own standalone 1 KB `.RAM` — load whichever suits the moment:
+
+| Aliens ↓ \ Speed → | Slow | Medium | Fast |
+|---|---|---|---|
+| **3** | [`SHOOTER_3_SLOW`](ram/SHOOTER_3_SLOW.RAM) | [`SHOOTER_3_MED`](ram/SHOOTER_3_MED.RAM) | [`SHOOTER_3_FAST`](ram/SHOOTER_3_FAST.RAM) |
+| **6** | [`SHOOTER_6_SLOW`](ram/SHOOTER_6_SLOW.RAM) | [`SHOOTER_6_MED`](ram/SHOOTER_6_MED.RAM) | [`SHOOTER_6_FAST`](ram/SHOOTER_6_FAST.RAM) |
+| **9** | [`SHOOTER_9_SLOW`](ram/SHOOTER_9_SLOW.RAM) | [`SHOOTER_9_MED`](ram/SHOOTER_9_MED.RAM) | [`SHOOTER_9_FAST`](ram/SHOOTER_9_FAST.RAM) |
+
+[`ram/SHOOTER.RAM`](ram/SHOOTER.RAM) is the default (6 aliens, medium).
+
+**Implementation notes** (all in [`asm/shooter.asm`](asm/shooter.asm)):
+
+- Each object is drawn **endpoints-only** with a **Z-blank** between objects, so
+  the beam doesn't streak from one sprite to the next (unlike the single-stroke
+  wireframes above, these are separate figures).
+- Collisions are an **unsigned bounding-box** test done entirely with the carry
+  flag — INS8070 branches test `A`, so an unsigned compare is
+  `SUB; LD A,S; AND =0x80`.
+- The lose test scans for the **lowest still-*living*** alien, not the
+  formation's nominal bottom row, so a *killed* alien's empty slot can't "reach"
+  you and end the game.
+- **Refresh is decoupled from game logic** (several redraws per logic tick) to
+  keep the short-persistence phosphor bright while the game updates at a playable
+  rate — the same flicker/refresh trick used by the wireframe demos.
+
+> Developed and **played on the real MC6400 + Tektronix analog scope**; keypad and
+> SA/SB control are both confirmed on hardware.
 
 ---
 
@@ -266,8 +335,9 @@ bring-up setup.</em></p>
 
 ## Roadmap
 
-- **Interactive control.** Bring back hex-keypad control (yaw/pitch/zoom/freeze)
-  on top of the endpoints-only + RC drawing model.
+- **Interactive control — done for the game** ([The shooter](#the-shooter--a-playable-vector-game): keypad + SA/SB). Still to do: live hex-keypad control
+  (yaw/pitch/zoom/freeze) of the rotating wireframes.
+- A per-wave **difficulty ramp** for the shooter (faster descent each cleared wave).
 - More objects and per-object tuning; optional Z-blank for scopes that have a Z
   input.
 
